@@ -10,6 +10,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSansBold18pt7b.h>
+#include <BH1750.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -65,6 +66,7 @@ NeoPixelAnimator animations(AnimCount); // NeoPixel animation management object
 int number = 0;
 int t = 0;
 int hour, minute, second = 0;
+float brightness = 800;  // 0 .. 1024, where 0=max and 1024=off
 String formattedDate;
 String dayStamp;
 
@@ -74,6 +76,7 @@ String DoW[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 // Months
 String Months[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
+BH1750 lightMeter;
 
 void SetRandomSeed()
 {
@@ -115,7 +118,8 @@ void DrawTailPixels()
     hue = random(360) / 360.0f;
     for (uint16_t index = 0; index < strip.PixelCount()-4 && index <= TailLength; index++)
     {
-        float lightness = index * MaxLightness / TailLength;
+        // float lightness = index * MaxLightness / TailLength;
+        float lightness = (index+1) * (0.1+(1024-brightness)/2048.0f) / TailLength;
         RgbColor color = HslColor(hue, 1.0f, lightness);
 
         strip.SetPixelColor(index, colorGamma.Correct(color));
@@ -286,6 +290,7 @@ void blankDisplay(){
 
 void setup()
 {
+  Wire.begin();
   Serial.begin(115200);
   delay(1000);
   Serial.println("Large Digit Driver Example");
@@ -320,6 +325,7 @@ void setup()
   strip.Begin();
   strip.Show();
   SetRandomSeed();
+  lightMeter.begin();
 
   // Draw the tail that will be rotated through all the rest of the pixels
   DrawTailPixels();
@@ -335,16 +341,16 @@ void setup()
   display.display();
 }
 
-int pmax = 16383;
+uint16_t pmax = INT16_MAX;
 int p = pmax;
-int brightness = 0; 
 bool debug = true;
+float lux = 0.0;
 int level = 0;
 int last_level = 0;
 int dot_level = 0;
 int last_minute=0;
 int animation=0;
-
+long millis_offset=0;
 
 void loop()
 { 
@@ -362,24 +368,24 @@ void loop()
     Serial.println(" -> new minute");
     DrawTailPixels();
     formattedDate = timeClient.getFormattedDate();
-    Serial.println(formattedDate);    
+    Serial.println(formattedDate);  
+    millis_offset = millis();  
     animation = 45;
   }
   
   // brightness adjustment to sensor (optional)
-  // if (p % 200 == 0){
-  //   last_level = level;
-  //   brightness = 800; // analogRead(LIGHT_SENSOR);
-  //   level = map(brightness, 50, 1024, 1024, 0);
-  //   level = last_level + (level - last_level)/30;  // slew changes, avoid jumps
-  //   level = max(50, level);
-  //   level = min(1005, level);
-  //   Serial.print(" Light Level: ");
-  //   Serial.println(brightness);
-  //   ledcWrite(1, level);
-  //   // OVERRIDE, no sensor
-  //   level = 50;
-  // }
+  if (p % 300 == 0){
+    lux = lightMeter.readLightLevel();
+    last_level = level;
+    level = constrain(int(lux*10),1,300); 
+    brightness = map(level, 1, 300, 1020, 15);
+    //level = last_level + (level - last_level)/30;  // slew changes, avoid jumps
+    Serial.print("lux: ");
+    Serial.print(lux);
+    Serial.print("   brightness: ");
+    Serial.println(brightness);
+    ledcWrite(1, brightness);
+  }
 
   // dot_level = abs(map(millis() % 2000, 0, 1999, -1023, 1023));
   // ledcWrite(0, map(dot_level, 0, 1024, 0, 1024 - level * 0.9));
@@ -413,25 +419,30 @@ void loop()
 
     display.print(timeClient.getFormattedTime());
     display.print(".");
-    display.println(millis()/100 % 10);
+    display.println((millis()-millis_offset)/100 % 10);
     display.println(DoW[timeClient.getDay()]);
     
     int splitT = formattedDate.indexOf("T");
     dayStamp = formattedDate.substring(0, splitT);
     display.println(dayStamp);
     display.setTextSize(1); 
-    //display.println();
+    
+    display.print("IP:");
     display.println(WiFi.localIP());
-    display.print("WIFI RSSI: ");
+    display.print("WiFi:");
     display.print(WiFi.RSSI());
-    display.println(" dB");
+    display.print("dB");
+
+    display.print("  Lux:");
+    display.printf( "%0.1f",lux);
     
     display.display();
   }
 
   if (p % 5 == 0) {
     for (uint16_t dot = 0; dot < 4; dot++){
-      RgbColor color = HslColor(hue, 1.0f, abs(sin(p/200.0*(dot+1)))/2.0);
+      float wave = sin(p/200.0*(dot+1))/2.0;
+      RgbColor color = HslColor(hue, 1.0f, abs(wave)*(0.2+(1024-brightness)/2048.0f));
       strip.SetPixelColor(strip.PixelCount()+(3-dot)-4, colorGamma.Correct(color));
     }
   }
@@ -440,8 +451,20 @@ void loop()
   strip.Show();
 
   // wait 1 millisecond
-  long m = millis();
-  while (millis() == m){ NOP(); }
+  for(int x = 0; x<1000; x++){ float y=sin(rand()); }
   //Serial.println(p);
+
+  if (p % 5000 == 0){
+    //Serial.print(" > Heap free: ");
+    //Serial.println(ESP.getFreeHeap());
+
+    // gradually darken existing colors
+    for (uint16_t index = 0; index < strip.PixelCount()-4; index++){
+      RgbColor color = strip.GetPixelColor(index);
+      color.Darken(1);
+      strip.SetPixelColor(index, colorGamma.Correct(color));
+    }
+
+  }
 }
 
