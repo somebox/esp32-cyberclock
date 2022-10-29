@@ -19,7 +19,7 @@ I decided one day to make a clock using old-school 2.3" LED 7-segment displays. 
 
 The code for this clock has been a journey. There are a lot of things going on at the same time, animations at different speeds, and periodic changes. At first, I was hacking this counting interations and tweaking, but it soon became clear this was causing problems. This led to some frustrated rewrites and a lot of learning.
 
-I decided to give ![NeoPixelBus](https://github.com/Makuna/NeoPixelBus) a try, which I had been using for basic things, and discovered the ![NeoPixelAnimator](https://github.com/Makuna/NeoPixelBus/wiki/NeoPixelAnimator-object) object. Unline other periodic timer libraries, NeoPixelAnimator can manage multiple repeating animation cycles, and uses call backs with progress indication. It also has built-in easing functions, which helps make things feel more organic. 
+I decided to give [NeoPixelBus](https://github.com/Makuna/NeoPixelBus) a try, which I had been using for basic things, and discovered the [NeoPixelAnimator](https://github.com/Makuna/NeoPixelBus/wiki/NeoPixelAnimator-object) object. Unline other periodic timer libraries, NeoPixelAnimator can manage multiple repeating animation cycles, and uses call backs with progress indication. It also has built-in easing functions, which helps make things feel more organic. 
 
 This repository contains the firmware for the clock as well as various pictures, drawings and schematics, in case you want to make something similar.
 
