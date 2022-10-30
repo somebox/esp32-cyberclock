@@ -7,9 +7,9 @@ I decided one day to make a clock using old-school 2.3" LED 7-segment displays. 
 
 - 7 circuit boards and three custom mounted sections, mounted to an aluminum frame, about 600mm wide
 - An ESP32 WROOM32 devkit board
-- custom power board PCB for the ESP32, which provides a DC high voltage rail, 5v, 3.3v, level shifting (76hc125n) and various breakout headers
+- custom power board PCB for the ESP32, which provides a DC high voltage rail, 5v, 3.3v, level shifting (74HCT125n) and various breakout headers
 - 6x 2.3" 7-segment displays
-- each digit is mounted on a custom PCB with a 74hc596c driver IC and current-limiting resistors
+- each digit is mounted on a custom PCB with a TPIC6C596 driver IC (similar to standard "595" chips, but with much higher current handling) and current-limiting resistors for each LED
 - WS2812b 5050 LEDs are used for the circular effect (a common pbc, with 3d-printed mount), and the custom separator dot panels, all of which are mounted with hand-machined aluminum sections
 - An I2C ambient light meter, so the clock can adjust brightness automatically
 - A small OLED display shows the time, date, IP address, wifi strength and light level (lux)
