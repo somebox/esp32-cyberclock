@@ -50,6 +50,7 @@ void postNumber(byte number, boolean decimal)
     case ' ': segments = 0; break;
     case 'c': segments = g | e | d; break;
     case '-': segments = g; break;
+    case '_': segments = d; break;
   }
 
   if (decimal) segments |= dp;
