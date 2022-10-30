@@ -25,6 +25,10 @@ This repository contains the firmware for the clock as well as various pictures,
 
 ## Schematics
 
+Both PCB Projects and designs used are available here:
+- https://oshwlab.com/outfigurable/esp32-controller-w-power
+- https://oshwlab.com/outfigurable/2-3in-tpic6c596
+
 ### The dual-rail power board with level shifting
 ![cyberclock](./docs/esp32-power-board.png)
 
