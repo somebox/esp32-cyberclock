@@ -1,3 +1,26 @@
+/*
+
+A large six digit 7-segment LED clock, controlled by an ESP32, with extra blinkenlights.
+
+The LED modules are quite large, 2.3" tall, and require high voltage to drive the many
+leds in series for each segment (7-9v). To do this, six shift registers are used in 
+series, which handles the switching. A custom PCB is used to mount each digit, designed 
+around a TPIC6C596 IC, current-limiting resistors, plus headers for passing SPI, power 
+and brightness PWM between the boards.
+
+There are three voltage rails involved: 5v for the ESP32 and LED driver chips, ~7v DC to
+power the 7-segment digits, and 3.3v for microcontroller logic. A separate custom PCB has 
+been made to mount the ESP32, two DC/DC buck converters, a 74HTC125N IC for level-shifting,
+and various switches and headers. A small SSD1306 OLED display is mounted to this board 
+for showing system status, as well as a couple of power LEDs. The board also drives 25 WS2812b
+LEDs, plus an I2C ambient light sensor. 
+
+The clock connects via WiFiManager, which means it creates a hotspot on the first use for 
+configuration (SSID "ESP32_CyberclockV1"). Once connected it will get the current time using NTP. 
+The time zone offset is currently hard-coded.
+
+*/
+
 #include <Arduino.h>
 #include <WiFiManager.h>
 #include <SPI.h>
@@ -11,42 +34,33 @@
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <BH1750.h>
-#include "pixel_trail.h"
 
+// OLED display
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-/*
-
-A large four digit 7-segment LED clock, controlled by an ESP32, with extra blinkenlights.
-
-The LED modules are quite large, 2.3" tall, and require high voltage to drive the many
-leds in series for each segment (7-9v). To do this, four shift registers are used in 
-series (TPIC6C596), which handles the switching.
-
-As the ESP8266 is 3.3v logic, and the TPIC chip requires 5v logic, a level conversion is
-required. A four-channel 75HTC125N chip does the job here.
-
-There is also an SSD1306 OLED display, 25 WS2812b LEDs, plus an ambient light sensor attached. 
-
-*/
-
-WiFiManager wm;
-
+// PINs
 #define PIN_CLK   18    // Clock on the TPIC6C596
 #define PIN_LATCH 19    // Latch 
 #define PIN_DATA  23    // Serial data
 #define PIN_BRIGHTNESS 14 // PWM Enable on TPIC6C596
 #define LIGHT_SENSOR 33  // light-dependent resistor
 
+// Misc Config
 #define DISPLAY_SIZE 6  // Number of digits
+#define TZ_OFFSET 7200
 
-// Time Sync
+// Custom Code
+#include "pixel_trail.h"
+#include "led_digits.h"
+
+// WIFI and Time Sync
+WiFiManager wm;
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 7200, 600000); // proto, host, timeOffset, updateInterval
+NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", TZ_OFFSET, 600000); // proto, host, timeOffset, updateInterval
 
 // NeoPixels
 const uint16_t PixelCount = 25; // make sure to set this to the number of pixels in your strip
@@ -67,8 +81,8 @@ NeoPixelAnimator animations(AnimCount, NEO_CENTISECONDS); // NeoPixel animation 
 #define ANI_CLOCK 7
 
 // animation settings
-const uint16_t TailLength = 4; // length of the tail, must be shorter than PixelCount
 #define MAX_TRAILS 3
+const uint16_t TailLength = 4; // length of the tail, must be shorter than PixelCount
 PixelTrail *pixel_trails[MAX_TRAILS];
 float current_hue = 6000;  // tracking current cycle color (changes each minute)
 
@@ -96,7 +110,6 @@ String DoW[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 String Months[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 
-
 void InitTrails(){
   for (int i=0; i<MAX_TRAILS; i++){
     pixel_trails[i] = new PixelTrail(random(360) / 360.0f);
@@ -104,99 +117,6 @@ void InitTrails(){
   }
 }
 
-int reverse(int n){
-  int rev = 0;
-  int i = DISPLAY_SIZE;
-  while (i>0){
-    int rem = n % 10;
-    rev = rev*10 + rem;
-    n /= 10;
-    i--;
-  }
-  return rev;
-}
-
-//Given a number, or '-', shifts it out to the display
-void postNumber(byte number, boolean decimal)
-{
-  //       ---   A
-  //     /   /   F, B
-  //     ---     G
-  //   /   /     E, C
-  //   ---  .    D, DP
-
-  #define a  1<<0
-  #define b  1<<6
-  #define c  1<<5
-  #define d  1<<4
-  #define e  1<<3
-  #define f  1<<1
-  #define g  1<<2
-  #define dp 1<<7
-
-  byte segments = 0;
-
-  switch (number)
-  {
-    case 1: segments = b | c; break;
-    case 2: segments = a | b | d | e | g; break;
-    case 3: segments = a | b | c | d | g; break;
-    case 4: segments = f | g | b | c; break;
-    case 5: segments = a | f | g | c | d; break;
-    case 6: segments = a | f | g | e | c | d; break;
-    case 7: segments = a | b | c; break;
-    case 8: segments = a | b | c | d | e | f | g; break;
-    case 9: segments = a | b | c | d | f | g; break;
-    case 0: segments = a | b | c | d | e | f; break;
-    case ' ': segments = 0; break;
-    case 'c': segments = g | e | d; break;
-    case '-': segments = g; break;
-  }
-
-  if (decimal) segments |= dp;
-
-  shiftOut(PIN_DATA, PIN_CLK, MSBFIRST, segments);
-  //Clock these bits out to the drivers
-  // for (byte x = 0 ; x < 8 ; x++)
-  // {
-  //   digitalWrite(PIN_CLK, LOW);
-  //   digitalWrite(PIN_DATA, segments & 1 << (7 - x));
-  //   digitalWrite(PIN_CLK, HIGH); //Data transfers to the register on the rising edge of SRCK
-  // }
-}
-
-//Takes a number and displays it with leading zeroes
-void showNumber(float value)
-{
-  int number = reverse(abs(value)); 
-
-  digitalWrite(PIN_LATCH, LOW);
-
-  // update all digits of the display
-  for (int x = 0 ; x < DISPLAY_SIZE ; x++)
-  {
-    byte remainder = number % 10;
-    postNumber(remainder, false);
-    number /= 10;
-  }
-  //Latch the current segment data
-  digitalWrite(PIN_LATCH, HIGH); //Register moves storage register on the rising edge of RCK
-}
-
-void showRandom(){
-  digitalWrite(PIN_LATCH, LOW);
-  shiftOut(PIN_DATA, PIN_CLK, MSBFIRST, random(128));
-  //Latch the current segment data
-  digitalWrite(PIN_LATCH, HIGH); //Register moves storage register on the rising edge of RCK
-}
-
-void blankDisplay(){
-  digitalWrite(PIN_LATCH, LOW);
-  for (int i=0; i<4; i++){
-      shiftOut(PIN_DATA, PIN_CLK, MSBFIRST, 0);
-  }
-  digitalWrite(PIN_LATCH, HIGH); //Register moves storage register on the rising edge of RCK
-}
 
 void SetRandomSeed()
 {
