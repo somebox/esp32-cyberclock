@@ -8,8 +8,8 @@ I decided one day to make a clock using old-school 2.3" LED 7-segment displays. 
 - 7 circuit boards and three custom mounted sections, mounted to an aluminum frame, about 600mm wide
 - An ESP32 WROOM32 devkit board
 - custom power board PCB for the ESP32, which provides a DC high voltage rail, 5v, 3.3v, level shifting (74HCT125n) and various breakout headers
-- 6x 2.3" 7-segment displays
-- each digit is mounted on a custom PCB with a TPIC6C596 driver IC (similar to standard "595" chips, but with much higher current handling) and current-limiting resistors for each LED
+- 6x 2.3" 7-segment displays (running at ~7v, 10-pin common anode modules)
+- each digit is mounted on a custom PCB with a high-current LED driver chip and connected via JST cables in serial.
 - WS2812b 5050 LEDs are used for the circular effect (a common pbc, with 3d-printed mount), and the custom separator dot panels, all of which are mounted with hand-machined aluminum sections
 - An I2C ambient light meter, so the clock can adjust brightness automatically
 - A small OLED display shows the time, date, IP address, wifi strength and light level (lux)
@@ -30,9 +30,11 @@ Both PCB Projects and designs used are available here:
 - https://oshwlab.com/outfigurable/2-3in-tpic6c596
 
 ### The dual-rail power board with level shifting
+A 2.3mm barrel jack power connector feeds 9-12v into an adjustable buck converter, which produces ~7v DC line for the 7-segment modules. A second buck converter turns that into 5v, which feeds the microcontroller, WS2812 LEDs, and the 5v line going to the modules for the driver ICs. The regulator on the ESP32 produces 3.3v which is also available on-board for the display and sensors. The board has a couple of DIP switches in case you ever need to disable one of the two power rails for troubleshooting.
 ![cyberclock](./docs/esp32-power-board.png)
 
-### The LED 7-segment digit driver board (common anode, 74HC596c)
+### The LED 7-segment digit driver board (common anode, TPIC6C596)
+Each board sports a TPIC6C596 driver IC (similar to standard "595" chips, but with much higher current handling) and current-limiting resistors for each LED in the digit. In this configuration, HVCC DC power at ~7v and 5v are both supplied to the digit modules. Note that red and green modules have different power requirements, so the resistors on the boards are tweaked accordingly.
 ![cyberclock](./docs/led-driver-board.png)
 
 ## Some Pictures
